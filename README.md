@@ -20,5 +20,16 @@ $ covid Russia 04-03-2020
 $ covid Germany today
 ```
 
+## Setup
+
+To use the script from anywhere, you can set it up using `make`:
+
+```bash
+$ cd covid-status
+$ make
+```
+
+It will create a symlink to the script inside `/usr/local/bin/`.
+
 [1]: https://gisanddata.maps.arcgis.com/apps/opsdashboard/index.html#/bda7594740fd40299423467b48e9ecf6
 [2]: https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_daily_reports
