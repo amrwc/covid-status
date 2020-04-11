@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+
+# COVID Status
+#
+# A Bash script scraping Johns Hopkins University's (JHU) databases for data
+# related to the COVID-19 pandemic. It retrieves the key details about the
+# country supplied in the command-line arguments.
+#
+# Usage:
+# $ covid [country] [date_in_us_format]
+#
+# Example:
+# $ covid Russia 04-03-2020
+
+# Text utils
+readonly TXT_GREEN=$(tput setaf 2)
+readonly TXT_YELLOW=$(tput setaf 3)
+readonly TXT_RED=$(tput setaf 1)
+readonly TXT_BOLD=$(tput bold)
+readonly TXT_RESET=$(tput sgr0)
+
+# Displays usage instructions.
+function usage() {
+	printf "${TXT_BOLD}Usage:${TXT_RESET}\n"
+	printf "$ covid [${TXT_YELLOW}${TXT_BOLD}country${TXT_RESET}] "
+	printf "[${TXT_YELLOW}${TXT_BOLD}date_in_us_format/today${TXT_RESET}]\n\n"
+	printf "${TXT_YELLOW}${TXT_BOLD}country${TXT_RESET}: Germany, Russia, etc. (use quotes for multi-word nations)\n"
+	printf "${TXT_YELLOW}${TXT_BOLD}date${TXT_RESET}: MM-DD-YYYY, e.g. 03-15-2020; or simply 'today'\n"
+}
+
+# Prints error message and exits with the supplied exit code.
+# @param $1 error message
+# @param $2 exit code
+function raise_error() {
+	echo -e "${TXT_RED}${TXT_BOLD}ERROR: ${TXT_RESET}${TXT_RED}${1}${TXT_RESET}"
+	usage
+	exit "${2}"
+}
+
+readonly FIRST_ARG_LOWERCASE=$(echo ${1} | tr '[:upper:]' '[:lower:]')
+if [[ "${FIRST_ARG_LOWERCASE}" =~ ^(-h|-help|--help|h|help)$  ]]; then
+	usage
+	exit 0
+fi
+
+if [ "${2}" = "today" ] || [ -z "${2}" ]; then
+	readonly DATE_US_FORMAT=$(date -v -2d '+%m-%d-%Y')
+else
+	readonly DATE_US_FORMAT="${2}"
+fi
+
+if [ -z "${1}" ]; then
+	readonly COUNTRY='Germany'
+else
+	readonly COUNTRY="${1}"
+fi
+
+readonly URL_GITHUB_RAW_BASE='https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports'
+readonly URL_GITHUB_BASE='https://github.com/CSSEGISandData/COVID-19/blob/master/csse_covid_19_data/csse_covid_19_daily_reports'
+readonly URL="${URL_GITHUB_RAW_BASE}/${DATE_US_FORMAT}.csv"
+readonly URL_GITHUB="${URL_GITHUB_BASE}/${DATE_US_FORMAT}.csv"
+readonly DATA=$(curl -s "${URL}")
+if [[ "${DATA}" == *"404: Not Found"* ]]; then
+	raise_error "Data not found -- double-check the command-line arguments" 1
+fi
+readonly DATA_BY_COUNTRY=$(echo "${DATA}" | grep "${COUNTRY}")
+
+# CSV Columns:
+#  1. FIPS
+#  2. Admin2
+#  3. Province_State
+#  4. Country_Region
+#  5. Last_Update
+#  6. Lat
+#  7. Long_
+#  8. Confirmed
+#  9. Deaths
+# 10. Recovered
+# 11. Active
+# 12. Combined_Key
+
+readonly LOCATION=$(echo "${DATA_BY_COUNTRY}" | cut -d "," -f 12)
+readonly CONFIRMED_CASES=$(echo "${DATA_BY_COUNTRY}" | cut -d "," -f 8)
+readonly DEATHS=$(echo "${DATA_BY_COUNTRY}" | cut -d "," -f 9)
+readonly ACTIVE=$(echo "${DATA_BY_COUNTRY}" | cut -d "," -f 11)
+readonly RECOVERED=$(echo "${DATA_BY_COUNTRY}" | cut -d "," -f 10)
+
+printf "Source: ${URL_GITHUB}\n\n"
+printf "Location:\t${TXT_BOLD}${LOCATION}${TXT_RESET}\n"
+printf "Cases:\t\t${TXT_BOLD}${TXT_RED}${CONFIRMED_CASES}${TXT_RESET}\n"
+printf "Deaths:\t\t${TXT_BOLD}${TXT_RED}${DEATHS}${TXT_RESET}\n"
+printf "Active:\t\t${TXT_BOLD}${TXT_YELLOW}${ACTIVE}${TXT_RESET}\n"
+printf "Recovered:\t${TXT_BOLD}${TXT_GREEN}${RECOVERED}${TXT_RESET}\n"
