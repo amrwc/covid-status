@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2059
 
 # COVID Status
 #
@@ -26,7 +27,7 @@ function usage() {
 	printf "${TXT_BOLD}Usage:${TXT_RESET}\n"
 	printf "$ covid [${TXT_YELLOW}${TXT_BOLD}location${TXT_RESET}] "
 	printf "[${TXT_YELLOW}${TXT_BOLD}date_in_us_format/recent${TXT_RESET}]\n\n"
-	printf "${TXT_YELLOW}${TXT_BOLD}location${TXT_RESET} – Germany, Russia, etc. (use quotes for multi-word nations)\n"
+	printf "${TXT_YELLOW}${TXT_BOLD}location${TXT_RESET} – World, Russia, etc. (use quotes for multi-word nations)\n"
 	printf "${TXT_YELLOW}${TXT_BOLD}date${TXT_RESET} – MM-DD-YYYY, e.g. 03-15-2020; or simply 'recent'\n"
 }
 
@@ -34,7 +35,8 @@ function usage() {
 # @param $1 exit code
 # @param $2 error message
 function raise_error() {
-	printf "${TXT_RED}${TXT_BOLD}ERROR: ${TXT_RESET}${TXT_RED}${2}${TXT_RESET}\n"
+	printf "[$(date +'%Y-%m-%dT%H:%M:%S%z')]: "
+	printf "${TXT_RED}${TXT_BOLD}ERROR: ${TXT_RESET}${TXT_RED}${2}${TXT_RESET}\n" >&2
 	usage
 	exit "${1}"
 }
@@ -42,30 +44,40 @@ function raise_error() {
 # `tr '[:upper:]' '[:lower:]'` transforms the string to lowercase
 # `xargs` strips white space and fixes instances of double-space inside the string
 readonly FIRST_ARG_LOWERCASE="$(echo "${1}" | tr '[:upper:]' '[:lower:]' | xargs)"
-if [[ "${FIRST_ARG_LOWERCASE}" =~ ^(-h|-help|--help|h|help)$  ]]; then
+if [[ "${FIRST_ARG_LOWERCASE}" =~ ^(-h|-help|--help|h|help)$ ]]; then
 	usage
 	exit 0
 fi
 
-date="$(echo "${2}" | xargs)"
+date="$(echo "${2}" | tr '[:upper:]' '[:lower:]' | xargs)"
 if [ "${date}" = 'recent' ] || [ -z "${date}" ]; then
-	date="$(date -v -2d '+%m-%d-%Y')"
+	# `date -v -2d +'%m-%d-%Y'` -- gets date in MM-DD-YYYY format from two days ago
+	date="$(date -v -2d +'%m-%d-%Y')"
 fi
 
 location="$(echo "${1}" | xargs)"
-if [ -z "${location}" ]; then
-	location='Germany'
+readonly LOCATION_LOWERCASE="$(echo "${location}" | tr '[:upper:]' '[:lower:]')"
+if [ "${LOCATION_LOWERCASE}" = 'world' ] || [ -z "${location}" ]; then
+	location='World'
 fi
 
 readonly URL_GITHUB_RAW_BASE='https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports'
 readonly URL_GITHUB_BASE='https://github.com/CSSEGISandData/COVID-19/blob/master/csse_covid_19_data/csse_covid_19_daily_reports'
 readonly URL="${URL_GITHUB_RAW_BASE}/${date}.csv"
 readonly URL_GITHUB="${URL_GITHUB_BASE}/${date}.csv"
+
 readonly DATA=$(curl -s "${URL}")
 if [[ "${DATA}" == *"404: Not Found"* ]]; then
 	raise_error 1 "Data not found -- double-check the command-line arguments"
 fi
-readonly DATA_BY_LOCATION=$(echo "${DATA}" | grep "${location}")
+
+if [ "${location}" = 'World' ]; then
+	# `sed '1d'` -- removes the first line, the column names in this case
+	readonly DATA_BY_LOCATION="$(echo "${DATA}" | sed '1d')"
+else
+	# `grep "${location}"` -- grabs all the lines containing $location
+	readonly DATA_BY_LOCATION="$(echo "${DATA}" | grep "${location}")"
+fi
 
 # CSV Columns:
 #  1. FIPS
@@ -81,25 +93,35 @@ readonly DATA_BY_LOCATION=$(echo "${DATA}" | grep "${location}")
 # 11. Active
 # 12. Combined_Key
 
-# `cut -d "," -f 12` -- retrieves 12th column with `,` as a separator
-# `tr -cd ' [:alnum:]'` -- only allows alphanumeric characters and white space
-location_processed="$(echo "${DATA_BY_LOCATION}" | cut -d "," -f 12)"
+# `cut -d ',' -f 12` -- retrieves 12th column with `,` as a separator
+location_processed="$(echo "${DATA_BY_LOCATION}" | cut -d ',' -f 12)"
+
+# If there's more than one line in the 'Combined_Key' column, use the location
+# supplied in command-line arguments. It's better to use the name from the
+# column if possible as it may include more information. For instance, if the
+# user supplied 'Emirates', `grep` will match 'United Arab Emirates' and it's
+# a more favourable name.
+# `wc -l` -- counts lines of stdin
 if [ "$(echo "${location_processed}" | wc -l)" -gt 1 ]; then
 	location_processed="${location}"
 else
+	# `tr -cd ' [:alnum:]'` -- only allows alphanumeric characters and white space
 	location_processed="$(echo "${location_processed}" | tr -cd ' [:alnum:]')"
 fi
 
 # `paste -sd+ -` -- merges multiple lines and joins them with `+`
 # `bc` -- interprets stdin as a mathematical expression and calculates it
-readonly CONFIRMED_CASES="$(echo "${DATA_BY_LOCATION}" | cut -d "," -f 8 | paste -sd+ - | bc)"
-readonly DEATHS="$(echo "${DATA_BY_LOCATION}" | cut -d "," -f 9 | paste -sd+ - | bc)"
-readonly ACTIVE="$(echo "${DATA_BY_LOCATION}" | cut -d "," -f 11 | paste -sd+ - | bc)"
-readonly RECOVERED="$(echo "${DATA_BY_LOCATION}" | cut -d "," -f 10 | paste -sd+ - | bc)"
+confirmed_cases="$(echo "${DATA_BY_LOCATION}" | cut -d ',' -f 8 | paste -sd+ - | bc)"
+# Truncate to integer as there's one mysterious decimal value in every dataset
+confirmed_cases="$(echo "(${confirmed_cases}+0.5)/1" | bc)"
+
+readonly DEATHS="$(echo "${DATA_BY_LOCATION}" | cut -d ',' -f 9 | paste -sd+ - | bc)"
+readonly ACTIVE="$(echo "${DATA_BY_LOCATION}" | cut -d ',' -f 11 | paste -sd+ - | bc)"
+readonly RECOVERED="$(echo "${DATA_BY_LOCATION}" | cut -d ',' -f 10 | paste -sd+ - | bc)"
 
 printf "Source: ${URL_GITHUB}\n\n"
 printf "Location:\t${TXT_BOLD}${location_processed}${TXT_RESET}\n"
-printf "Cases:\t\t${TXT_BOLD}${TXT_RED}${CONFIRMED_CASES}${TXT_RESET}\n"
+printf "Cases:\t\t${TXT_BOLD}${TXT_RED}${confirmed_cases}${TXT_RESET}\n"
 printf "Deaths:\t\t${TXT_BOLD}${TXT_RED}${DEATHS}${TXT_RESET}\n"
 printf "Active:\t\t${TXT_BOLD}${TXT_YELLOW}${ACTIVE}${TXT_RESET}\n"
 printf "Recovered:\t${TXT_BOLD}${TXT_GREEN}${RECOVERED}${TXT_RESET}\n"
