@@ -4,13 +4,15 @@
 #
 # A Bash script scraping Johns Hopkins University's (JHU) databases for data
 # related to the COVID-19 pandemic. It retrieves the key details about the
-# country supplied in the command-line arguments.
+# location supplied in the command-line arguments.
 #
 # Usage:
-# $ covid [country] [date_in_us_format]
+# $ covid [location] [date_in_us_format/'recent']
 #
-# Example:
+# Examples:
 # $ covid Russia 04-03-2020
+# $ covid Germany recent
+# $ covid 'French Polynesia'
 
 # Text utils
 readonly TXT_GREEN=$(tput setaf 2)
@@ -22,48 +24,48 @@ readonly TXT_RESET=$(tput sgr0)
 # Displays usage instructions.
 function usage() {
 	printf "${TXT_BOLD}Usage:${TXT_RESET}\n"
-	printf "$ covid [${TXT_YELLOW}${TXT_BOLD}country${TXT_RESET}] "
-	printf "[${TXT_YELLOW}${TXT_BOLD}date_in_us_format/today${TXT_RESET}]\n\n"
-	printf "${TXT_YELLOW}${TXT_BOLD}country${TXT_RESET}: Germany, Russia, etc. (use quotes for multi-word nations)\n"
-	printf "${TXT_YELLOW}${TXT_BOLD}date${TXT_RESET}: MM-DD-YYYY, e.g. 03-15-2020; or simply 'today'\n"
+	printf "$ covid [${TXT_YELLOW}${TXT_BOLD}location${TXT_RESET}] "
+	printf "[${TXT_YELLOW}${TXT_BOLD}date_in_us_format/recent${TXT_RESET}]\n\n"
+	printf "${TXT_YELLOW}${TXT_BOLD}location${TXT_RESET} – Germany, Russia, etc. (use quotes for multi-word nations)\n"
+	printf "${TXT_YELLOW}${TXT_BOLD}date${TXT_RESET} – MM-DD-YYYY, e.g. 03-15-2020; or simply 'recent'\n"
 }
 
 # Prints error message and exits with the supplied exit code.
-# @param $1 error message
-# @param $2 exit code
+# @param $1 exit code
+# @param $2 error message
 function raise_error() {
-	echo -e "${TXT_RED}${TXT_BOLD}ERROR: ${TXT_RESET}${TXT_RED}${1}${TXT_RESET}"
+	printf "${TXT_RED}${TXT_BOLD}ERROR: ${TXT_RESET}${TXT_RED}${2}${TXT_RESET}\n"
 	usage
-	exit "${2}"
+	exit "${1}"
 }
 
-readonly FIRST_ARG_LOWERCASE=$(echo ${1} | tr '[:upper:]' '[:lower:]')
+# `tr '[:upper:]' '[:lower:]'` transforms the string to lowercase
+# `xargs` strips white space and fixes instances of double-space inside the string
+readonly FIRST_ARG_LOWERCASE="$(echo "${1}" | tr '[:upper:]' '[:lower:]' | xargs)"
 if [[ "${FIRST_ARG_LOWERCASE}" =~ ^(-h|-help|--help|h|help)$  ]]; then
 	usage
 	exit 0
 fi
 
-if [ "${2}" = "today" ] || [ -z "${2}" ]; then
-	readonly DATE_US_FORMAT=$(date -v -2d '+%m-%d-%Y')
-else
-	readonly DATE_US_FORMAT="${2}"
+date="$(echo "${2}" | xargs)"
+if [ "${date}" = 'recent' ] || [ -z "${date}" ]; then
+	date="$(date -v -2d '+%m-%d-%Y')"
 fi
 
-if [ -z "${1}" ]; then
-	readonly COUNTRY='Germany'
-else
-	readonly COUNTRY="${1}"
+location="$(echo "${1}" | xargs)"
+if [ -z "${location}" ]; then
+	location='Germany'
 fi
 
 readonly URL_GITHUB_RAW_BASE='https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports'
 readonly URL_GITHUB_BASE='https://github.com/CSSEGISandData/COVID-19/blob/master/csse_covid_19_data/csse_covid_19_daily_reports'
-readonly URL="${URL_GITHUB_RAW_BASE}/${DATE_US_FORMAT}.csv"
-readonly URL_GITHUB="${URL_GITHUB_BASE}/${DATE_US_FORMAT}.csv"
+readonly URL="${URL_GITHUB_RAW_BASE}/${date}.csv"
+readonly URL_GITHUB="${URL_GITHUB_BASE}/${date}.csv"
 readonly DATA=$(curl -s "${URL}")
 if [[ "${DATA}" == *"404: Not Found"* ]]; then
-	raise_error "Data not found -- double-check the command-line arguments" 1
+	raise_error 1 "Data not found -- double-check the command-line arguments"
 fi
-readonly DATA_BY_COUNTRY=$(echo "${DATA}" | grep "${COUNTRY}")
+readonly DATA_BY_LOCATION=$(echo "${DATA}" | grep "${location}")
 
 # CSV Columns:
 #  1. FIPS
@@ -79,14 +81,24 @@ readonly DATA_BY_COUNTRY=$(echo "${DATA}" | grep "${COUNTRY}")
 # 11. Active
 # 12. Combined_Key
 
-readonly LOCATION=$(echo "${DATA_BY_COUNTRY}" | cut -d "," -f 12)
-readonly CONFIRMED_CASES=$(echo "${DATA_BY_COUNTRY}" | cut -d "," -f 8)
-readonly DEATHS=$(echo "${DATA_BY_COUNTRY}" | cut -d "," -f 9)
-readonly ACTIVE=$(echo "${DATA_BY_COUNTRY}" | cut -d "," -f 11)
-readonly RECOVERED=$(echo "${DATA_BY_COUNTRY}" | cut -d "," -f 10)
+# `cut -d "," -f 12` -- retrieves 12th column with `,` as a separator
+# `tr -cd ' [:alnum:]'` -- only allows alphanumeric characters and white space
+location_processed="$(echo "${DATA_BY_LOCATION}" | cut -d "," -f 12)"
+if [ "$(echo "${location_processed}" | wc -l)" -gt 1 ]; then
+	location_processed="${location}"
+else
+	location_processed="$(echo "${location_processed}" | tr -cd ' [:alnum:]')"
+fi
+
+# `paste -sd+ -` -- merges multiple lines and joins them with `+`
+# `bc` -- interprets stdin as a mathematical expression and calculates it
+readonly CONFIRMED_CASES="$(echo "${DATA_BY_LOCATION}" | cut -d "," -f 8 | paste -sd+ - | bc)"
+readonly DEATHS="$(echo "${DATA_BY_LOCATION}" | cut -d "," -f 9 | paste -sd+ - | bc)"
+readonly ACTIVE="$(echo "${DATA_BY_LOCATION}" | cut -d "," -f 11 | paste -sd+ - | bc)"
+readonly RECOVERED="$(echo "${DATA_BY_LOCATION}" | cut -d "," -f 10 | paste -sd+ - | bc)"
 
 printf "Source: ${URL_GITHUB}\n\n"
-printf "Location:\t${TXT_BOLD}${LOCATION}${TXT_RESET}\n"
+printf "Location:\t${TXT_BOLD}${location_processed}${TXT_RESET}\n"
 printf "Cases:\t\t${TXT_BOLD}${TXT_RED}${CONFIRMED_CASES}${TXT_RESET}\n"
 printf "Deaths:\t\t${TXT_BOLD}${TXT_RED}${DEATHS}${TXT_RESET}\n"
 printf "Active:\t\t${TXT_BOLD}${TXT_YELLOW}${ACTIVE}${TXT_RESET}\n"
