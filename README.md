@@ -17,15 +17,16 @@ The data is taken from their [daily reports available on GitHub][daily_reports].
 $ covid [location] [date/'recent']
 ```
 
-| Argument     | Description                                                                                                                                                                                                                                                                    |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **location** | Location/country. Multi-word locations must be wrapped in quotes.<br />Data about countries with multiple locations (e.g. `France`, `United Kingdom`)<br />are combined. Specific locations, such as `French Polynesia`, are still<br />supported, but require the exact name. |
-| **date**     | Date in `MM-DD-YYYY` format.                                                                                                                                                                                                                                                   |
-| **recent**   | Can be used instead of specific date to retrieve most recent<sup>[[1]][footnote_01]</sup> data.<br />This is the default behaviour when no date was is specified.                                                                                                              |
+| Argument     | Description                                                                                                                                                                                                                                                                                         |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **location** | Location/country. Defaults to 'World'. Multi-word locations must be wrapped in quotes.<br />Data about countries with multiple locations (e.g. `France`, `United Kingdom`) are<br />combined. Specific locations, such as `French Polynesia`, are still supported, but<br />require the exact name. |
+| **date**     | Date in `MM-DD-YYYY` format.                                                                                                                                                                                                                                                                        |
+| **recent**   | Can be used instead of specific date to retrieve most recent<sup>[[1]][footnote_01]</sup> data. This is the default<br />behaviour when no date was is specified.                                                                                                                                   |
 
 Examples:
 
 ```bash
+$ covid world
 $ covid US
 $ covid Russia 04-13-2020
 $ covid Germany recent
