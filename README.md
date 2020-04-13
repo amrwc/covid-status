@@ -17,11 +17,11 @@ The data is taken from their [daily reports available on GitHub][daily_reports].
 $ covid [location] [date/'recent']
 ```
 
-| Argument     | Description                                                                                                                                                       |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **location** | Location/country. For instance, `France` has multiple entries. Specific locations,<br />such as `French Polynesia`, are also supported.                           |
-| **date**     | Date in `MM-DD-YYYY` format.                                                                                                                                      |
-| **recent**   | Can be used instead of specific date to retrieve most recent<sup>[[1]][footnote_01]</sup> data.<br />This is the default behaviour when no date was is specified. |
+| Argument     | Description                                                                                                                                                                                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **location** | Location/country. Multi-word locations must be wrapped in quotes.<br />Data about countries with multiple locations (e.g. `France`, `United Kingdom`)<br />are combined. Specific locations, such as `French Polynesia`, are still<br />supported, but require the exact name. |
+| **date**     | Date in `MM-DD-YYYY` format.                                                                                                                                                                                                                                                   |
+| **recent**   | Can be used instead of specific date to retrieve most recent<sup>[[1]][footnote_01]</sup> data.<br />This is the default behaviour when no date was is specified.                                                                                                              |
 
 Examples:
 
@@ -47,7 +47,7 @@ It will create a symlink to the script inside `/usr/local/bin/`.
 
 <sub>
     <p id="footnote_01">
-        [1]: Usually, the most recent data is from two days ago.
+        [1]: Usually, the most recent data is from two days ago due to data update frequency.
     </p>
 </sub>
 
